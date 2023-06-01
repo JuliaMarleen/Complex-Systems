@@ -1,0 +1,305 @@
+---
+title: "Entry 13"
+output: html_document
+date: "2023-05-29"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+set.seed(1)
+library(readr)
+library(tidyr)
+library(dplyr)
+library(lubridate)
+library(dplyr)
+#read in the data
+ESMdata <- read_csv("~/UvT DSS/Complex systems/ESMdata/ESMdata/ESMdata.csv")
+
+# Make a plot of the time series (zoomed into 100 points to visualize)
+plot(ESMdata$mood_down[100:200],type='l', ylim=c(-3,7),col='blue', ylab="Self Rating", xlab='Observation', main= "Mood ESM Time Series")
+lines(ESMdata$mood_irritat[100:200],col='turquoise',type='l', lty=2)
+lines(ESMdata$mood_guilty[100:200],col='deeppink',type='l' , lty=3)
+legend("bottomright", legend=c("Down","Irritated","Guilty"), col=c("blue", "turquoise", "deeppink"), lty=1:3, cex=0.8)
+```
+```{r}
+ #Make a plot of the time series (zoomed into 100 points to visualize)
+plot(ESMdata$phy_hungry[100:200],type='l', ylim=c(-3,7),col='blue', ylab="Self Rating", xlab='Observation', main= "Mood ESM Time Series")
+lines(ESMdata$phy_pain[100:200],col='turquoise',type='l', lty=2)
+lines(ESMdata$phy_tired[100:200],col='deeppink',type='l' , lty=3)
+legend("bottomright", legend=c("Hungry", "Pain", "Tired"), col=c("blue", "turquoise", "deeppink"), lty=1:3, cex=0.8)
+```
+
+
+```{r}
+
+#install.packages("sindyr")
+#install.packages("kableExtra")
+set.seed(1)
+library(sindyr)
+library(knitr)
+library(kableExtra)
+#create a subset of the data
+ESM_sub <- ESMdata %>% select(c('mood_down','mood_irritat', 'mood_guilty', 'phy_hungry', 'phy_tired', 'phy_pain'))
+head(ESM_sub)
+ESM_sub <- as.data.frame(ESM_sub)
+#impute the missing values
+ESM_sub <- zoo::na.approx(ESM_sub)
+ESM_sub <- as.data.frame(ESM_sub)
+
+
+#Estimates coefficients for set of ordinary differential equations governing system variables using sindy using finite differences (polyorder set to 3 and change lambda)
+     
+sindy.out <- sindy(ESM_sub, dt = 1, lambda = 0.05,  Theta = features(ESM_sub, 3 )) #perform SINDy
+sindy.out$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria") #create a paper-format table
+
+sindy.out2 <- sindy(ESM_sub, dt = 1, lambda = 0.20,  Theta = features(ESM_sub, 3 ))
+sindy.out2$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out3 <- sindy(ESM_sub, dt = 1, lambda = 0.35,  Theta = features(ESM_sub, 3 ))
+sindy.out3$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out4 <- sindy(ESM_sub, dt = 1, lambda = 0.5,  Theta = features(ESM_sub, 3 ))
+sindy.out4$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+```{r}
+# Get sum of the number of elements in columns that are not equal to zero (surviving coefficients)
+colSums(sindy.out$B!= 0)
+colSums(sindy.out2$B!= 0)
+colSums(sindy.out3$B!= 0)
+colSums(sindy.out4$B!= 0)
+```
+
+```{r}
+#Estimates coefficients for set of ordinary differential equations governing system variables using sindy using finite differences (different lambdas, polyorder = 2)
+set.seed(1)
+sindy.out5 <- sindy(ESM_sub, dt = 1, lambda = 0.05,  Theta = features(ESM_sub, 2 )) #perform SINDy
+sindy.out5$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria") #create a paper-format table
+
+sindy.out6 <- sindy(ESM_sub, dt = 1, lambda = 0.20,  Theta = features(ESM_sub, 2 ))
+sindy.out6$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out7 <- sindy(ESM_sub, dt = 1, lambda = 0.35,  Theta = features(ESM_sub, 2 ))
+sindy.out7$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out8 <- sindy(ESM_sub, dt = 1, lambda = 0.5,  Theta = features(ESM_sub, 2 ))
+sindy.out8$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+```{r}
+# Get sum of the number of elements in columns that are not equal to zero (surviving coefficients)
+colSums(sindy.out$B!= 0)
+colSums(sindy.out2$B!= 0)
+colSums(sindy.out3$B!= 0)
+colSums(sindy.out4$B!= 0)
+```
+
+
+
+```{r}
+#Data generation from the new equations to check if it looks similar or different from the original
+mood.now = ESM_sub[1,] # Initial condition of mood
+mood.modeled = ESM_sub[1,]
+dt=1
+for (i in 1:1476) {
+  mood.now = mood.now + (dt)*features(mood.now,3) %*% sindy.out2$B
+  mood.modeled = rbind(mood.modeled,mood.now)
+}
+```
+
+```{r}
+
+
+plot(ESM_sub$mood_down[1:200],type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "A. Mood Down ESM Time Series")
+lines(mood.modeled$mood_down[1:200],col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+```{r}
+plot(ESM_sub$mood_irritat[1:200],type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "B. Mood Irritated ESM Time Series")
+lines(mood.modeled$mood_irritat[1:200],col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+```{r}
+plot(ESM_sub$mood_guilty[1:200],type='l', ylim=c(-5,5),col='blue', ylab="Self Rating", xlab='t', main= "C. Mood Guilty ESM Time Series")
+lines(mood.modeled$mood_guilty[1:200],col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+
+```{r}
+plot(ESM_sub$phy_hungry[1:200],type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "D. Physical sensation hungry ESM Time Series")
+lines(mood.modeled$phy_hungry[1:200],col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+```{r}
+plot(ESM_sub$phy_tired[1:200],type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "E. Physical sensation tired ESM Time Series")
+lines(mood.modeled$phy_tired[1:200],col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+
+```{r}
+plot(ESM_sub$phy_pain[1:200],type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "F. Physical sensation pain ESM Time Series")
+lines(mood.modeled$phy_pain[1:200],col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+
+```{r}
+#Windowed-SINDy
+set.seed(1)
+sindy.out_window <- windowed_sindy(ESM_sub, dt = 1, lambda = 0.05, B.expected = sindy.out$B) #perform SINDy
+sindy.out_window$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria") #create a paper-format table
+
+sindy.out2_window  <- windowed_sindy(ESM_sub, dt = 1, lambda = 0.20, B.expected = sindy.out2$B)
+sindy.out2_window $B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out3_window  <- windowed_sindy(ESM_sub, dt = 1, lambda = 0.35, B.expected = sindy.out3$B)
+sindy.out3_window$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out4_window  <- windowed_sindy(ESM_sub, dt = 1, lambda = 0.5, B.expected = sindy.out4$B)
+sindy.out4_window $B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r}
+#Denoise the data by taking the average value per day measurement
+set.seed(1)
+ESMdata[order(as.Date(ESMdata$date, format="%d/%m/%Y")),]
+ESMdatamean <- ESMdata %>% 
+    group_by(date) %>%
+    summarise_all("mean")
+ESMdatamean <- ESMdatamean[order(as.Date(ESMdatamean$date, format="%d/%m/%Y")),]
+
+#create a subset of the data
+ESMmean_sub <- ESMdatamean %>% select(c('mood_down','mood_irritat', 'mood_guilty', 'phy_hungry', 'phy_tired', 'phy_pain'))
+head(ESMmean_sub)
+ESMmean_sub <- as.data.frame(ESMmean_sub)
+#impute the missing values
+ESMmean_sub <- zoo::na.approx(ESMmean_sub)
+ESMmean_sub <- as.data.frame(ESMmean_sub)
+
+```
+
+```{r}
+
+#Make a plot of the time series that is daily summarised 
+
+plot(ESMmean_sub$mood_down,type='l', ylim=c(-10,7),col='blue', ylab="Self Rating", xlab='Day', main= "Daily mood ESM Time Series")
+lines(ESMmean_sub$mood_irritat,col='turquoise',type='l', lty=2)
+lines(ESMmean_sub$mood_guilty,col='deeppink',type='l' , lty=3)
+legend("bottomright", legend=c("Down","Irritated","Guilty"), col=c("blue", "turquoise", "deeppink"), lty=1:3, cex=0.8)
+```
+
+```{r}
+#Make a plot of the time series othat is daily summarised data
+plot(ESMmean_sub$phy_hungry,type='l', ylim=c(-7,7),col='blue', ylab="Self Rating", xlab='Day', main= "Daily mood ESM Time Series")
+lines(ESMmean_sub$phy_pain,col='turquoise',type='l', lty=2)
+lines(ESMmean_sub$phy_tired,col='deeppink',type='l' , lty=3)
+legend("bottomright", legend=c("Hungry", "Pain", "Tired"), col=c("blue", "turquoise", "deeppink"), lty=1:3, cex=0.8)
+```
+
+
+```{r}
+#Estimatee coefficients for set of ordinary differential equations governing system variables using sindy using finite differences (different lambdas, polyorder =3)
+set.seed(1)  
+sindy.out.mean <- sindy(ESMmean_sub, dt = 1, lambda = 0.05,  Theta = features(ESMmean_sub, 3 )) #perform SINDy
+sindy.out.mean$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria") #create a paper-format table
+
+sindy.out2.mean <- sindy(ESMmean_sub, dt = 1, lambda = 0.20,  Theta = features(ESMmean_sub, 3 ))
+sindy.out2.mean$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out3.mean <- sindy(ESMmean_sub, dt = 1, lambda = 0.35,  Theta = features(ESMmean_sub, 3 ))
+sindy.out3.mean$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+sindy.out4.mean <- sindy(ESMmean_sub, dt = 1, lambda = 0.5,  Theta = features(ESMmean_sub, 3 ))
+sindy.out4.mean$B %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+
+
+```{r}
+# Get sum of the number of elements in columns that are not equal to zero (surviving coefficients)
+colSums(sindy.out.mean$B!= 0)
+colSums(sindy.out2.mean$B!= 0)
+colSums(sindy.out3.mean$B!= 0)
+colSums(sindy.out4.mean$B!= 0)
+```
+
+```{r}
+#Data generation from the new equations of denoised data to check if it looks similar or different from the original denoised data
+mood.now2 = ESMmean_sub[1,] # Initial condition of mood
+mood.modeled2 = ESMmean_sub[1,]
+dt=1
+for (i in 1:238) {
+  mood.now2 = mood.now2 + (dt)*features(mood.now2,3) %*% sindy.out2.mean$B
+  mood.modeled2 = rbind(mood.modeled2,mood.now2)
+}
+```
+
+```{r}
+
+
+plot(ESMmean_sub$mood_down,type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "A. Mood Down daily ESM Time Series")
+lines(mood.modeled2$mood_down,col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+```{r}
+plot(ESMmean_sub$mood_irritat,type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "B. Mood Irritated daily ESM Time Series")
+lines(mood.modeled2$mood_irritat,col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+```{r}
+plot(ESMmean_sub$mood_guilty,type='l', ylim=c(-5,5),col='blue', ylab="Self Rating", xlab='t', main= "C. Mood Guilty daily ESM Time Series")
+lines(mood.modeled2$mood_guilty,col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+
+```{r}
+plot(ESMmean_sub$phy_hungry,type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "D. Physical sensation hungry daily ESM Time Series")
+lines(mood.modeled2$phy_hungry,col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+```{r}
+plot(ESMmean_sub$phy_tired,type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "E. Physical sensation tired daily ESM Time Series")
+lines(mood.modeled2$phy_tired,col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+
+```{r}
+plot(ESMmean_sub$phy_pain,type='l', ylim=c(-5,7),col='blue', ylab="Self Rating", xlab='t', main= "F. Physical sensation pain daily ESM Time Series")
+lines(mood.modeled2$phy_pain,col='green',type='l', lty=2)
+legend("bottomright", legend=c("Actual ESM data", "Predicted SINDy"), col=c("blue", "green"), lty=1:2, cex=0.6)
+```
+
+

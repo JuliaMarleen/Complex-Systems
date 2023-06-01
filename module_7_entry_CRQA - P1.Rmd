@@ -1,0 +1,254 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning =  FALSE)
+knitr::opts_chunk$set(fig.align='center') 
+```
+
+## Libraries
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(crqa)
+library(readr)
+library(pracma)
+library(tseriesChaos)
+library(zoo)
+```
+
+## Including Plots
+
+```{r, warning=FALSE}
+RIdata <- read.csv("./rhode_island_6var.csv", sep=";")
+CMdata <- read.csv("./chiang_mai_6var.csv", sep=";")
+
+# two variables weren't complete
+RIdata$AverageRelativeHumidity = na.approx(RIdata$AverageRelativeHumidity)
+CMdata$WindSpeed = na.approx(CMdata$WindSpeed)
+
+# adjust US measures to metric etc.
+RIdata$AveragePressure <- (RIdata$AveragePressure * 33.86) #Change inHG to mBar
+RIdata$DailyPrecipitation <- (RIdata$DailyPrecipitation * 2.54) #Inch to cm
+RIdata$MaximumTemperature <- ((RIdata$MaximumTemperature - 32) * 5/9) #Farenheit to Celcius
+RIdata$MinimumTemperature <- ((RIdata$MinimumTemperature- 32) * 5/9) #Farenheit to Celcius
+RIdata$WindSpeed <- (RIdata$WindSpeed * 1.60934) #mph to km/ph
+
+
+colnames(RIdata) = colnames(CMdata) = c("AveragePressure", "AverageRelativeHumidity","DailyPrecipitation","MaximumTemperature", "MinimumTemperature","WindSpeed")
+RIdata$AveragePressure = as.numeric(as.matrix(RIdata$AveragePressure)); 
+RIdata$AverageRelativeHumidity = as.numeric(as.matrix(RIdata$AverageRelativeHumidity));
+RIdata$DailyPrecipitation = as.numeric(as.matrix(RIdata$DailyPrecipitation));
+RIdata$MaximumTemperature = as.numeric(as.matrix(RIdata$MaximumTemperature)); 
+RIdata$MinimumTemperature = as.numeric(as.matrix(RIdata$MinimumTemperature));
+RIdata$WindSpeed = as.numeric(as.matrix(RIdata$WindSpeed));
+
+CMdata$AveragePressure = as.numeric(as.matrix(CMdata$AveragePressure)); 
+CMdata$AverageRelativeHumidity = as.numeric(as.matrix(CMdata$AverageRelativeHumidity));
+CMdata$DailyPrecipitation = as.numeric(as.matrix(CMdata$DailyPrecipitation));
+CMdata$MaximumTemperature = as.numeric(as.matrix(CMdata$MaximumTemperature));
+CMdata$MinimumTemperature = as.numeric(as.matrix(CMdata$MinimumTemperature));
+CMdata$WindSpeed = as.numeric(as.matrix(CMdata$WindSpeed));
+
+print(RIdata)
+print(CMdata)
+
+RIdata = RIdata[-1, ]
+CMdata = CMdata[-1, ]
+
+print(RIdata)
+print(CMdata)
+```
+#assess the plots
+
+```{r}
+plot(RIdata$AveragePressure, type='l')
+lines(CMdata$AveragePressure,col=2)
+legend("bottomright", legend=c("RIdata$AveragePressure", "CMdata$AveragePressure"), lty=1,col = c("black", "red"))
+
+plot(RIdata$AverageRelativeHumidity, type='l')
+lines(CMdata$AverageRelativeHumidity,col=2)
+legend("bottomright", legend=c("RIdata$AverageRelativeHumidity", "CMdata$AverageRelativeHumidity"), lty=1,col = c("black", "red"))
+
+plot(RIdata$DailyPrecipitation)
+lines(CMdata$DailyPrecipitation,col=2)
+legend("topright", legend=c("RIdata$DailyPrecipitation", "CMdata$DailyPrecipitation"), lty=1,col = c("black", "red"))
+
+plot(RIdata$MaximumTemperature, type='l')
+lines(CMdata$MaximumTemperature,col=2)
+legend("bottomright", legend=c("RIdata$MaximumTemperature", "CMdata$MaximumTemperature"), lty=1,col = c("black", "red"))
+
+plot(RIdata$MinimumTemperature, type='l')
+lines(CMdata$MinimumTemperature,col=2)
+legend("bottomright", legend=c("RIdata$MinimumTemperature", "CMdata$MinimumTemperature"), lty=1,col = c("black", "red"))
+
+plot(RIdata$WindSpeed, type='l')
+lines(CMdata$WindSpeed,col=2)
+legend("bottomright", legend=c("RIdata$WindSpeed", "CMdata$WindSpeed"), lty=1,col = c("black", "red"))
+```
+
+```{r}
+library(readr)
+library(tidyverse)
+library(crqa)
+library(entropy)
+library(nonlinearTseries)
+library(plot3D)
+library(tseriesChaos)
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) #changing current directory to the current folder
+
+RIdata$Observation<- 1:nrow(RIdata)
+
+```
+
+```{r}
+plot1 <- ggplot(data=RIdata, aes(x=Observation, y=AverageRelativeHumidity)) + geom_line(aes(Observation, AverageRelativeHumidity),color="black") + geom_line(aes(Observation,WindSpeed), color="red") + xlab("Days") + ylab("Value") + ggtitle("Time Series of items AverageRelativeHumidity and WindSpeed ")
+
+plot1
+```
+
+
+
+```{r}
+
+# Preprocessing? Yes, for recurrence analysis they should be normalized. 
+
+RIdata$AverageRelativeHumidity <- as.numeric(scale(RIdata$AverageRelativeHumidity))
+RIdata$WindSpeed <- as.numeric(scale(RIdata$WindSpeed))
+
+plot2 <- ggplot(data=RIdata, aes(x=Observation, y=AverageRelativeHumidity)) + geom_line(aes(Observation, AverageRelativeHumidity),color="black") + geom_line(aes(Observation,WindSpeed), color="red") + xlab("Days") + ylab("Value") + ggtitle("Time Series of normalized items AverageRelativeHumidity and WindSpeed ")
+plot2
+
+```
+
+
+```{r}
+
+# # d delay parameter estimation by average mutual information function (AMI)
+# # take 1st local minimum as a good estimate
+# 
+# #for mood_lonely
+# 
+# mutual(RIdata$AverageRelativeHumidity, lag.max = 50) # d= 2 best, 1st local minimum at 2
+# 
+# #for mood_guilty
+# 
+# mutual(RIdata$WindSpeed, lag.max = 50) # d= 2 best, 1st local minimum at 2
+
+```
+
+
+```{r}
+
+# #find m parameter
+# 
+# #for mood_lonely
+# plot(false.nearest(RIdata$AverageRelativeHumidity, m = 10, d = 2, t = 0))
+# #1st local minimum for m = 5
+# 
+# 
+# #for mood_guilty
+# plot(false.nearest(RIdata$WindSpeed, m = 10, d = 2, t = 0))
+# #1st local minimum for m = 3
+
+```
+CRQA for our continuous data
+
+```{r}
+
+## Initialize our parameters for optimize function
+par = list(method = "crqa", metric = "euclidean", maxlag =  20, 
+           radiusspan = 100, radiussample = 40, normalize = 0, 
+           rescale = 4, mindiagline = 10, minvertline = 10, tw = 0, 
+           whiteline = FALSE, recpt = FALSE, side = "both", 
+           datatype = "continuous", fnnpercent  = 20,  
+           typeami = "mindip", nbins  = 50, criterion = "firstBelow",
+           threshold = 1, maxEmb = 20, numSamples = 500, 
+           Rtol = 10, Atol = 2)
+
+```
+
+Optimize Parameters for CRQA
+
+```{r}
+
+## Get parameters
+optParams <- optimizeParam(RIdata$AverageRelativeHumidity, RIdata$WindSpeed, par,min.rec = 2, max.rec = 5)
+print(unlist(optParams))
+
+
+```
+Run CRQA
+
+```{r}
+
+# Set parameters for CRQA
+delay = optParams$delay; embed = optParams$emddim; rescale = 0; radius = optParams$radius;
+normalize = 0; mindiagline = 2; minvertline = 2;
+tw = 0; whiteline = FALSE; recpt = FALSE; side = "both"
+method = 'crqa'; metric = 'euclidean';  
+datatype = "continuous"
+
+# Run CRQA
+ans <- crqa(RIdata$AverageRelativeHumidity, RIdata$WindSpeed,delay, embed, rescale, radius, normalize,mindiagline, minvertline, tw, whiteline, recpt, side, method, metric, datatype)
+
+```
+
+```{r}
+
+# Print some of the CRQA metrics
+ans[1:10]
+
+```
+
+```{r}
+
+# Generate a recurrence plot
+RP <- as.matrix(ans$RP)
+
+#https://github.com/aaronlikens/rqapp/blob/master/R/recurrence_plot.R
+
+recurrence_plot = function(recurrence_matrix){
+  # recurrence matrix is the ngCMatrix output from the crqa::crqa function
+  
+  # # convert the numeric logical matrix into something that R can plot
+
+  # plot_matrix = as(recurrence_matrix, 'matrix')*1 # the *1 converts from logical to numeric
+  plot_matrix = t(recurrence_matrix)
+  diag(plot_matrix) = 1
+  Size = dim(plot_matrix)
+  rows = Size[1]
+  cols = Size[2]
+  oldpar = par(no.readonly = TRUE)
+  par(pty = 's')
+  par(mgp = c(0,0.5,0))
+  par(mar = c(3,1,2,1))
+  graphics::image(1:rows,1:cols,plot_matrix,
+                  asp = 1,
+                  bty = 'n',
+                  axes = F, 
+                  xlab = '',
+                  ylab = '',
+                  zlim = c(0,1),
+                  col = c(0,1),
+                  main = 'Recurrence Plot',
+                  useRaster = TRUE)
+  
+  axis(side = 1, tck = -0.02, xlim = c(0,cols))
+  axis(side = 2, tck = -0.02, ylim =c(0,rows))
+  axis(side = 3, tck = -0.02, ylim = c(0,cols), labels = FALSE)
+  axis(side = 4, tck = -0.02, ylim = c(0,rows), labels = FALSE)
+  box(lwd = 1)
+  title(ylab = 'Time', line = 1.75)
+  title(xlab = 'Time', line = 1.75)
+  
+  par(oldpar)
+}
+
+recurrence_plot(RP)
+
+```

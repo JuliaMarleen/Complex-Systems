@@ -1,0 +1,202 @@
+---
+title: "Entry 10"
+output: html_document
+date: "2023-05-25"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+## R Markdown
+
+```{r}
+library(readr)
+library(tidyr)
+library(dplyr)
+ESMdata <- read_csv("~/UvT DSS/Complex systems/ESMdata/ESMdata/ESMdata.csv")
+
+```
+
+```{r}
+library(gridExtra)
+#plot EMA data 
+par(mfrow = c(3,1))
+plot(ESMdata$mood_down,type='l', ylim=c(-3,3),col='blue', ylab="Self Rating", xlab='Observation', main= "A. Mood Down ESM Time Series", lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,1476), cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5)
+plot(ESMdata$mood_irritat,type='l', ylim=c(1,7),col='red', ylab="Self Rating", xlab='Observation', main= "B. Mood Irritated ESM Time Series", lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,1476), cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5)
+plot(ESMdata$phy_hungry,type='l', ylim=c(1,7),col='green', ylab="Self Rating", xlab='Observation', main= "C. I am Hungry ESM Time Series", lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,1476),cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5)
+
+```
+
+```{r}
+library(gridExtra)
+#mean-center the data that is rated on Likert 1-7 scale
+ESMdata_meancentered <- ESMdata %>%
+   mutate(across(c(phy_pain,phy_tired,phy_hungry, mood_irritat ), ~  . - 4))
+#plot time series across different scales to check self-similarity
+par(mfrow = c(3,3))
+plot(ESMdata_meancentered$mood_down,type='l', ylim=c(-3,3),col='blue', ylab="Self Rating", xlab='Observation', main= "A. Mood Down ESM Time Series", lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,1477), cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$mood_irritat,type='l', ylim=c(-3,3),col='red', ylab="Self Rating", xlab='Observation', main= "B. Mood Irritated ESM Time Series", lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,1477), cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$phy_hungry,type='l', ylim=c(-3,3),col='green', ylab="Self Rating", xlab='Observation', main= "C. I am Hungry ESM Time Series", lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,1477),cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$mood_down[500:650],type='l', ylim=c(-3,3),col='blue', ylab="Self Rating", xlab='Observation',  lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,151), cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$mood_irritat[500:650],type='l', ylim=c(-3,3),col='red', ylab="Self Rating", xlab='Observation', lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,151), cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$phy_hungry[500:650],type='l', ylim=c(-3,3),col='green', ylab="Self Rating", xlab='Observation',  lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,151),cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$mood_down[835:850],type='l', ylim=c(-3,3),col='blue', ylab="Self Rating", xlab='Observation', lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,16), cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$mood_irritat[835:850],type='l', ylim=c(-3,3),col='red', ylab="Self Rating", xlab='Observation',  lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,16), cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+plot(ESMdata_meancentered$phy_hungry[835:850],type='l', ylim=c(-3,3),col='green', ylab="Self Rating", xlab='Observation', lwd =3, xaxs = "i", yaxs = "i", xlim=c(0,16),cex.lab=2, cex.axis=2, cex.main=2, cex.sub=2)
+```
+
+
+
+
+
+
+```{r}
+#install.packages("fractalRegression")
+library("fractalRegression")
+
+```
+
+```{r}
+#impute the missing values
+ESMdata_meancentered$mood_down<- zoo::na.approx(ESMdata_meancentered$mood_down)
+ESMdata_meancentered$mood_irritat<- zoo::na.approx(ESMdata_meancentered$mood_irritat)
+ESMdata_meancentered$phy_hungry<- zoo::na.approx(ESMdata_meancentered$phy_hungry)
+#perform DF-MFA
+ESM.Mood.Down.mf.dfa.out <- mfdfa(x = ESMdata_meancentered$mood_down, q = c(-5:5), order = 1,  scales=scales, scale_ratio=2)
+ESM.Surr.Mood.Down.mf.dfa.out <- mfdfa(x = sample(ESMdata_meancentered$mood_down, replace = FALSE), q = c(-5:5), order = 1,  scales=scales, scale_ratio=2)
+ESM.Mood.Irritat.mf.dfa.out <- mfdfa(x = ESMdata_meancentered$mood_irritat, q = c(-5:5), order = 1,  scales=scales, scale_ratio=2)
+
+ESM.Surr.Mood.Irritat.mf.dfa.out <- mfdfa(x = sample(ESMdata_meancentered$mood_irritat, replace = FALSE), q = c(-5:5), order = 1,  scales=scales, scale_ratio=2)
+ESM.Phy.Hungry.mf.dfa.out <- mfdfa(x = ESMdata_meancentered$phy_hungry, q = c(-5:5), order = 1,  scales=scales, scale_ratio=2)
+ESM.Surr.Phy.Hungry.mf.dfa.out <- mfdfa(x = sample(ESMdata_meancentered$phy_hungry, replace = FALSE), q = c(-5:5), order = 1,  scales=scales, scale_ratio=2)
+
+```
+
+```{r}
+#plot the results of MF-DFA for both normal data as surrogate data
+mfdfa.plot(ESM.Mood.Down.mf.dfa.out, do.surrogate = TRUE)
+mfdfa.plot(ESM.Phy.Hungry.mf.dfa.out, do.surrogate = TRUE)
+mfdfa.plot(ESM.Mood.Irritat.mf.dfa.out, do.surrogate = TRUE)
+mfdfa.plot(ESM.Surr.Mood.Down.mf.dfa.out, do.surrogate = TRUE)
+mfdfa.plot(ESM.Surr.Phy.Hungry.mf.dfa.out, do.surrogate = TRUE)
+mfdfa.plot(ESM.Surr.Mood.Irritat.mf.dfa.out, do.surrogate = TRUE)
+```
+
+```{r}
+#plot multifractal singularity spectrum
+plot(ESM.Mood.Down.mf.dfa.out$h, ESM.Mood.Down.mf.dfa.out$Dh, type="b", pch=19, xlab="h(q)", ylab = "D(h)", main = "Multifractal singularity spectrum")
+plot(ESM.Mood.Irritat.mf.dfa.out$h, ESM.Mood.Irritat.mf.dfa.out$Dh, type="b", pch=19, xlab="h(q)", ylab = "D(h)", main = "Multifractal singularity spectrum")
+plot(ESM.Phy.Hungry.mf.dfa.out$h,ESM.Phy.Hungry.mf.dfa.out$Dh, type="b", pch=19, xlab="h(q)", ylab = "D(h)", main = "Multifractal singularity spectrum")
+```
+
+```{r}
+#Calculate width of multifractal singularity spectrum
+max(ESM.Mood.Down.mf.dfa.out$h) - min(ESM.Mood.Down.mf.dfa.out$h)   # multi.W
+max(ESM.Mood.Irritat.mf.dfa.out$h) - min(ESM.Mood.Irritat.mf.dfa.out$h) #
+max(ESM.Phy.Hungry.mf.dfa.out$h) - min(ESM.Phy.Hungry.mf.dfa.out$h) #
+max(ESM.Surr.Mood.Down.mf.dfa.out$h) - min(ESM.Mood.Down.mf.dfa.out$h)   # multi.W
+max(ESM.Surr.Mood.Irritat.mf.dfa.out$h) - min(ESM.Mood.Irritat.mf.dfa.out$h) #
+max(ESM.Surr.Phy.Hungry.mf.dfa.out$h) - min(ESM.Phy.Hungry.mf.dfa.out$h) #
+
+```
+
+
+```{r}
+#Extract the mono-fractal alpha exponent and interpret it
+plot(ESM.Mood.Down.mf.dfa.out$q, ESM.Mood.Down.mf.dfa.out$f)
+ESM.Mood.Down.mf.dfa.out$h[which(ESM.Mood.Down.mf.dfa.out$q==2)]
+ESM.Mood.Irritat.mf.dfa.out$h[which(ESM.Mood.Irritat.mf.dfa.out$q==2)]
+ESM.Phy.Hungry.mf.dfa.out$h[which(ESM.Phy.Hungry.mf.dfa.out$q==2)]
+ESM.Surr.Mood.Down.mf.dfa.out$h[which(ESM.Mood.Down.mf.dfa.out$q==2)]
+ESM.Surr.Mood.Irritat.mf.dfa.out$h[which(ESM.Mood.Irritat.mf.dfa.out$q==2)]
+ESM.Surr.Phy.Hungry.mf.dfa.out$h[which(ESM.Phy.Hungry.mf.dfa.out$q==2)]
+```
+
+
+
+
+
+
+```{r}
+#install.packages("tidyquant")
+library(tidyquant)
+
+# Downloading Netflix price using tidyquant
+Netflix <- tq_get('NFLX',
+               from = "2019-01-01",
+               to = "2023-01-01",
+               get = "stock.prices")
+```
+
+```{r}
+library(ggplot2)
+Netflix %>%
+  ggplot(aes(x = date, y = close)) +
+  geom_line(col = "red") +
+  theme_classic() +
+  labs(x = 'Date',
+       y = "Netflix daily closing price",
+       ) 
+```
+
+```{r}
+#make it a daily closing price data set by imputing missing values for days without #measurements
+library(tidyr)
+library(dplyr)
+Netflix <- Netflix %>%
+  mutate(date = as.Date(date)) %>%
+  complete(date = seq.Date(min(date), max(date), by="day"))
+Netflix$close <- na.approx(Netflix$close)
+```
+
+```{r}
+#mean-center the data 
+Netflix$Close_centered <- scale(Netflix$close, center = TRUE, scale = FALSE)
+#plot the netflix closing rate at different scales
+library(ggpubr)
+full <- Netflix %>%
+  ggplot(aes(x = date, y = Close_centered, col = "red")) +
+  geom_line() +
+  theme_classic() +
+  labs(x = 'Date',
+       y = "Closing price",
+       title = "Mean-centered Netflix daily closing price chart (full time-series)") 
+
+steps150 <- Netflix[450:600,] %>%
+  ggplot(aes(x = date, y = Close_centered, col = "red")) +
+  geom_line() +
+  theme_classic() +
+  labs(x = 'Date',
+       y = "Closing price",
+       title = "Mean-centered Netflix daily closing price chart (150 time-steps scale)") 
+
+steps15 <- Netflix[1175:1200,] %>%
+  ggplot(aes(x = date, y = Close_centered, col = "red")) +
+  geom_line() +
+  theme_classic() +
+  labs(x = 'Date',
+       y = "Closing price",
+       title = "Mean-centered Netflix daily closing price chart (15 time-steps scale)") 
+
+ggarrange(full, steps150, steps15, 
+          labels = c("A", "B", "C"),
+          ncol = 1, nrow = 3)
+```
+
+```{r}
+#perform MF-DFA on netflix closing price data
+library(fractalRegression)
+scales <- logscale(scale_min = 16,scale_max = length(Netflix$Close_centered)/10, scale_ratio = 2)
+Netflix.Close.mf.dfa.out <- mfdfa(x = Netflix$Close_centered, q = c(-5:5), order = 1,  scales=scales, scale_ratio = 2)
+Netflix.Close.surr.mf.dfa.out <- mfdfa(x = sample(Netflix$Close_centered, replace = FALSE), q = c(-5:5), order = 1,  scales=scales, scale_ratio = 2)
+mfdfa.plot(Netflix.Close.mf.dfa.out, do.surrogate = TRUE)
+mfdfa.plot(Netflix.Close.surr.mf.dfa.out, do.surrogate = TRUE)
+```
+
+
+```{r}
+#Calculate width of multifractal singularity spectrum
+max(Netflix.Close.mf.dfa.out$h) - min(Netflix.Close.mf.dfa.out$h) 
+max(Netflix.Close.surr.mf.dfa.out$h) - min(Netflix.Close.surr.mf.dfa.out$h)
+```
+

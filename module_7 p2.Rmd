@@ -1,0 +1,390 @@
+---
+title: "report_week_7_V2"
+author: "Marleen van Lubeek"
+date: "2023-05-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning =  FALSE)
+knitr::opts_chunk$set(fig.align='center') 
+```
+
+## Libraries
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(crqa)
+library(readr)
+library(pracma)
+library(tseriesChaos)
+library(zoo)
+```
+
+## Including Plots
+
+```{r, warning=FALSE}
+RIdata <- read.csv("./rhode_island_6var.csv", sep=";")
+CMdata <- read.csv("./chiang_mai_6var.csv", sep=";")
+
+# two variables weren't complete
+RIdata$AverageRelativeHumidity = na.approx(RIdata$AverageRelativeHumidity)
+CMdata$WindSpeed = na.approx(CMdata$WindSpeed)
+
+# adjust US measures to metric etc.
+RIdata$AveragePressure <- (RIdata$AveragePressure * 33.86) #Change inHG to mBar
+RIdata$DailyPrecipitation <- (RIdata$DailyPrecipitation * 2.54) #Inch to cm
+RIdata$MaximumTemperature <- ((RIdata$MaximumTemperature - 32) * 5/9) #Farenheit to Celcius
+RIdata$MinimumTemperature <- ((RIdata$MinimumTemperature- 32) * 5/9) #Farenheit to Celcius
+RIdata$WindSpeed <- (RIdata$WindSpeed * 1.60934) #mph to km/ph
+
+
+colnames(RIdata) = colnames(CMdata) = c("AveragePressure", "AverageRelativeHumidity","DailyPrecipitation","MaximumTemperature", "MinimumTemperature","WindSpeed")
+RIdata$AveragePressure = as.numeric(as.matrix(RIdata$AveragePressure)); 
+RIdata$AverageRelativeHumidity = as.numeric(as.matrix(RIdata$AverageRelativeHumidity));
+RIdata$DailyPrecipitation = as.numeric(as.matrix(RIdata$DailyPrecipitation));
+RIdata$MaximumTemperature = as.numeric(as.matrix(RIdata$MaximumTemperature)); 
+RIdata$MinimumTemperature = as.numeric(as.matrix(RIdata$MinimumTemperature));
+RIdata$WindSpeed = as.numeric(as.matrix(RIdata$WindSpeed));
+
+CMdata$AveragePressure = as.numeric(as.matrix(CMdata$AveragePressure)); 
+CMdata$AverageRelativeHumidity = as.numeric(as.matrix(CMdata$AverageRelativeHumidity));
+CMdata$DailyPrecipitation = as.numeric(as.matrix(CMdata$DailyPrecipitation));
+CMdata$MaximumTemperature = as.numeric(as.matrix(CMdata$MaximumTemperature));
+CMdata$MinimumTemperature = as.numeric(as.matrix(CMdata$MinimumTemperature));
+CMdata$WindSpeed = as.numeric(as.matrix(CMdata$WindSpeed));
+
+print(RIdata)
+print(CMdata)
+
+RIdata = RIdata[-1, ]
+CMdata = CMdata[-1, ]
+
+print(RIdata)
+print(CMdata)
+```
+#assess the plots
+
+```{r}
+plot(RIdata$AveragePressure, type='l')
+lines(CMdata$AveragePressure,col=2)
+legend("bottomright", legend=c("RIdata$AveragePressure", "CMdata$AveragePressure"), lty=1,col = c("black", "red"))
+
+plot(RIdata$AverageRelativeHumidity, type='l')
+lines(CMdata$AverageRelativeHumidity,col=2)
+legend("bottomright", legend=c("RIdata$AverageRelativeHumidity", "CMdata$AverageRelativeHumidity"), lty=1,col = c("black", "red"))
+
+plot(RIdata$DailyPrecipitation)
+lines(CMdata$DailyPrecipitation,col=2)
+legend("topright", legend=c("RIdata$DailyPrecipitation", "CMdata$DailyPrecipitation"), lty=1,col = c("black", "red"))
+
+plot(RIdata$MaximumTemperature, type='l')
+lines(CMdata$MaximumTemperature,col=2)
+legend("bottomright", legend=c("RIdata$MaximumTemperature", "CMdata$MaximumTemperature"), lty=1,col = c("black", "red"))
+
+plot(RIdata$MinimumTemperature, type='l')
+lines(CMdata$MinimumTemperature,col=2)
+legend("bottomright", legend=c("RIdata$MinimumTemperature", "CMdata$MinimumTemperature"), lty=1,col = c("black", "red"))
+
+plot(RIdata$WindSpeed, type='l')
+lines(CMdata$WindSpeed,col=2)
+legend("bottomright", legend=c("RIdata$WindSpeed", "CMdata$WindSpeed"), lty=1,col = c("black", "red"))
+```
+
+######CRQA
+
+Finding optimal parameters:
+
+```{r}
+# select a bin size using Sturges' rule (1926)
+bin = ceil(1 + log2(nrow(RIdata)))
+
+# Lets get ML for AP for P1
+mutual(RIdata$AverageRelativeHumidity, bin, 30, plot = TRUE)
+delay.MT1 = 18
+
+mutual(RIdata$WindSpeed, bin, 30, plot = TRUE)
+delay.AP1 = 15
+
+# Select Dimension
+plot(false.nearest(RIdata$AverageRelativeHumidity, m = 6, d = delay.MT1, t = 0, rt = 10, eps = sd(RIdata$AverageRelativeHumidity)/10))
+M.MT1 = 5
+
+plot(false.nearest(RIdata$WindSpeed, m=6, d = delay.AP1, t = 0, rt = 10, eps = sd(RIdata$WindSpeed)/10))
+M.AP1 = 5
+
+par = list(method = "crqa", metric = "euclidean", maxlag =  20, 
+           radiusspan = 100, radiussample = 20, normalize = 0, 
+           rescale = 4, mindiagline = 10, minvertline = 10, tw = 0, 
+           whiteline = FALSE, recpt = FALSE, side = "both", 
+           datatype = "continuous", fnnpercent  = 100,  
+           typeami = "mindip", nbins  = 50, criterion = "firstBelow",
+           threshold = 1, maxEmb = 20, numSamples = 500, 
+           Rtol = 10, Atol = 2)
+
+Parm.MT1 = optimizeParam(RIdata$AverageRelativeHumidity, RIdata$AverageRelativeHumidity, par)
+Parm.AP1 = optimizeParam(RIdata$WindSpeed, RIdata$WindSpeed, par)
+
+print(unlist(Parm.MT1))
+print(unlist(Parm.AP1))
+
+```
+
+######
+
+```{r}
+# select a bin size using Sturges' rule (1926)
+bin = ceil(1 + log2(nrow(CMdata)))
+
+# Lets get ML for AP for P1
+mutual(CMdata$AverageRelativeHumidity, bin, 30, plot = TRUE)
+delay.MT2 = 18
+
+mutual(CMdata$WindSpeed, bin, 30, plot = TRUE)
+delay.AP2 = 15
+
+# Select Dimension
+plot(false.nearest(CMdata$AverageRelativeHumidity, m = 6, d = delay.MT2, t = 0, rt = 10, eps = sd(CMdata$AverageRelativeHumidity)/10))
+M.MT2 = 5
+
+plot(false.nearest(CMdata$WindSpeed, m=6, d = delay.AP2, t = 0, rt = 10, eps = sd(CMdata$WindSpeed)/10))
+M.AP2 = 5
+
+par = list(method = "crqa", metric = "euclidean", maxlag =  20, 
+           radiusspan = 100, radiussample = 20, normalize = 0, 
+           rescale = 4, mindiagline = 10, minvertline = 10, tw = 0, 
+           whiteline = FALSE, recpt = FALSE, side = "both", 
+           datatype = "continuous", fnnpercent  = 100,  
+           typeami = "mindip", nbins  = 50, criterion = "firstBelow",
+           threshold = 1, maxEmb = 20, numSamples = 500, 
+           Rtol = 10, Atol = 2)
+
+Parm.MT2 = optimizeParam(CMdata$AverageRelativeHumidity, CMdata$AverageRelativeHumidity, par)
+Parm.AP2 = optimizeParam(CMdata$WindSpeed, CMdata$WindSpeed, par)
+
+print(unlist(Parm.MT2))
+print(unlist(Parm.AP2))
+
+```
+
+
+#####
+
+```{r}
+delay = max(Parm.MT1$delay, Parm.MT2$delay, Parm.AP1$delay, Parm.AP2$delay) 
+embed =  median(c(Parm.MT1$emddim, Parm.MT2$emddim, Parm.AP1$emddim, Parm.AP2$emddim))  
+radius = mean(Parm.MT1$radius, Parm.MT2$radius, Parm.AP1$radius, Parm.AP2$radius)
+
+rescale =  1; normalize = 0; minvertline = 2; mindiagline = 2; whiteline = FALSE;
+recpt = FALSE; tw = 0
+
+CRP.AverageRelativeHumidity = crqa(RIdata$AverageRelativeHumidity, CMdata$AverageRelativeHumidity, delay, embed, rescale, radius,
+    normalize, minvertline, mindiagline, tw,  whiteline, recpt)
+
+CRP.WindSpeed = crqa(RIdata$WindSpeed, CMdata$WindSpeed, delay, embed, rescale, radius,
+    normalize, minvertline, mindiagline, tw,  whiteline, recpt)
+
+round(cbind(unlist(CRP.AverageRelativeHumidity[1:9]), unlist(CRP.WindSpeed[1:9])), digit = 2)
+```
+
+
+####
+
+ 
+```{r}
+CRP1 = CRP.AverageRelativeHumidity$RP; CRP2 = CRP.AveragePressure$RP
+
+CRP1 = matrix(as.numeric(CRP1), nrow = nrow(CRP1)) 
+CRP2 = matrix(as.numeric(CRP2), nrow = nrow(CRP2)) 
+```
+
+
+
+
+```{r, fig.width = 16, fig.height = 10}
+tstamp =  1:nrow(CRP1) # generate the time indices 
+realtime = round((tstamp*83.3)/1000) # this is the real time of the recording.
+indnorm = seq(1, max(tstamp), 120) # just take less points to put in the x-axis and y-axis
+indnorm = c(indnorm, max(tstamp))
+
+cols = c("white","blue4") # set up the colors
+
+par(mfrow = c(1,2), mar = c(3.8, 3.8, 0.2,2), font.axis = 2, cex.axis = 1,
+    font.lab = 2, cex.lab = 1.2)
+
+plot(tstamp, tstamp, 
+     type = "n", xaxt = "n", yaxt = "n",
+     xlab = "", ylab = "")
+
+# l = 1
+for (l in 1:ncol(CRP1)){
+  ind = which(CRP1[,l] == 1)
+  points(rep(l,length(ind)), ind, cex = 1.2, 
+         col = "blue4", pch = 16)
+}
+
+# add the name of the axes
+mtext("RI AverageRelativeHumidity", at = mean(tstamp), side = 1, line = 2, cex = 1.2, font = 2) 
+mtext("CM AverageRelativeHumidity", at = mean(tstamp), side = 2, line = 2, cex = 1.2, font = 2)
+# add the real time axis
+mtext(realtime[indnorm], at = indnorm, cex = 1, font = 2, line = 1, side = 1)
+mtext(realtime[indnorm], at = indnorm, cex = 1, font = 2, line = 1, side = 2)
+
+plot(tstamp, tstamp, 
+     type = "n", xaxt = "n", yaxt = "n",
+     xlab = "", ylab = "")
+
+# l = 1
+for (l in 1:ncol(CRP2)){
+  # print(l)
+  ind = which(CRP2[,l] == 1)
+  points(rep(l,length(ind)), ind, cex = 1.2, 
+         col = "blue4", pch = 16)
+  
+}
+
+mtext("RI WindSpeed", at = mean(tstamp), side = 1, line = 2, cex = 1.2, font = 2)
+mtext("CM WindSpeed", at = mean(tstamp), side = 2, line = 2, cex = 1.2, font = 2)
+# add the real time axis
+mtext(realtime[indnorm], at = indnorm, cex = 1, font = 2, line = 1, side = 1)
+mtext(realtime[indnorm], at = indnorm, cex = 1, font = 2, line = 1, side = 2)
+```
+
+######
+
+```{r}
+delay = max(Parm.AP1$delay, Parm.AP2$delay) 
+embed =  median(c(Parm.AP1$emddim, Parm.AP2$emddim))  
+radius = mean(Parm.AP1$radius, Parm.AP2$radius)
+
+rescale =  1; normalize = 0; minvertline = 2; mindiagline = 2; whiteline = FALSE;
+recpt = FALSE; tw = 0
+
+
+res = drpfromts(RIdata$WindSpeed, CMdata$WindSpeed, windowsize = 200, radius, delay, embed, rescale, normalize, mindiagline, minvertline, tw, whiteline, recpt, side = 'both', method = 'crqa', metric = 'euclidean', datatype = 'continuous')
+
+ profile = res$profile
+
+ plot(seq(1,length(profile),1), profile, type = "l", lwd = 5, xlab = "Lag", ylab = "Recurrence")
+
+```
+
+
+#####
+
+
+```{r}
+RIdata <- as.data.frame(RIdata)
+CMdata <- as.data.frame(CMdata)
+nbins = 10; maxlag = 10; criterion = "firstBelow"; threshold = exp(-1)
+tau1<-mdDelay(RIdata, nbins, maxlag, criterion, threshold)
+tau2<-mdDelay(CMdata, nbins, maxlag, criterion, threshold)
+
+tau = 1; maxEmb = 10; numSamples = 500; Rtol = 10; Atol = 2
+md_fnn_func <- mdFnn(RIdata, tau1, maxEmb, numSamples, Rtol, Atol)
+plot(md_fnn_func$embTimes,md_fnn_func$fnnPerc,type='l')
+md_fnn_func2 <- mdFnn(CMdata, tau2, maxEmb, numSamples, Rtol, Atol)
+plot(md_fnn_func2$embTimes,md_fnn_func2$fnnPerc,type='l')
+```
+
+
+
+```{r}
+par = list(method = "mdcrqa", metric = "euclidean", maxlag =  20, 
+           radiusspan = 100, radiussample = 40, normalize = 0, 
+           rescale = 4, mindiagline = 10, minvertline = 10, tw = 0, 
+           whiteline = FALSE, recpt = FALSE, side = "both", 
+           datatype = "continuous", fnnpercent  = NA,  
+           typeami = "mindip", nbins  = 50, criterion = "firstBelow",
+           threshold = 1, maxEmb = 20, numSamples = 500, 
+           Rtol = 10, Atol = 2)
+
+results = optimizeParam(RIdata, CMdata, par, min.rec = 2, max.rec = 5)
+print(unlist(results))
+```
+
+
+
+#### Run the mdcrqa
+```{r}
+
+delay = 2; embed = 1; rescale = 2; radius = .4;
+normalize = 0; mindiagline = 2; minvertline = 2;
+tw = 0; whiteline = FALSE; recpt = FALSE; side = "both"
+method = 'mdcrqa'; metric = 'euclidean';  
+datatype = "continuous"
+
+ans <- crqa(RIdata,CMdata, delay, embed, rescale, radius, normalize, 
+           mindiagline, minvertline, tw, whiteline, recpt, side, method,
+           metric, datatype)
+
+print(unlist(ans[1:9]))
+
+```
+
+
+
+```{r}
+print(results$delay)
+print(results$emddim)
+print(results$radius)
+
+delay = results$delay; embed = results$emddim; rescale = 2; radius = results$radius;
+normalize = 0; mindiagline = 2; minvertline = 2;
+tw = 0; whiteline = FALSE; recpt = FALSE; side = "both"
+method = 'mdcrqa'; metric = 'euclidean';  
+datatype = "continuous"
+
+# Run mdRQA
+ans <- crqa(RIdata,CMdata, delay, embed, rescale, radius, normalize, 
+           mindiagline, minvertline, tw, whiteline, recpt, side, method,
+           metric, datatype)
+print(unlist(ans[1:9]))
+
+```
+
+
+```{r}
+recurrence_plot = function(recurrence_matrix){
+  # recurrence matrix is the ngCMatrix output from the crqa::crqa function
+  
+  # # convert the numeric logical matrix into something that R can plot
+
+  # plot_matrix = as(recurrence_matrix, 'matrix')*1 # the *1 converts from logical to numeric
+  plot_matrix = t(recurrence_matrix)
+  diag(plot_matrix) = 1
+  Size = dim(plot_matrix)
+  rows = Size[1]
+  cols = Size[2]
+  oldpar = par(no.readonly = TRUE)
+  par(pty = 's')
+  par(mgp = c(0,0.5,0))
+  par(mar = c(3,1,2,1))
+  graphics::image(1:rows,1:cols,plot_matrix,
+                  asp = 1,
+                  bty = 'n',
+                  axes = F, 
+                  xlab = '',
+                  ylab = '',
+                  zlim = c(0,1),
+                  col = c(0,1),
+                  main = 'Recurrence Plot',
+                  useRaster = TRUE)
+  
+  axis(side = 1, tck = -0.02, xlim = c(0,cols))
+  axis(side = 2, tck = -0.02, ylim =c(0,rows))
+  axis(side = 3, tck = -0.02, ylim = c(0,cols), labels = FALSE)
+  axis(side = 4, tck = -0.02, ylim = c(0,rows), labels = FALSE)
+  box(lwd = 1)
+  title(ylab = 'Time', line = 1.75)
+  title(xlab = 'Time', line = 1.75)
+  
+  par(oldpar)
+}
+
+RP <- as.matrix(ans$RP)
+recurrence_plot(RP)
+```
+
+

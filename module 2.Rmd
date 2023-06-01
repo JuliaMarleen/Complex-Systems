@@ -1,0 +1,130 @@
+---
+title: "Complex systems 2"
+output: html_document
+date: '2023-03-12'
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#library(dplyr)
+#library(tidyverse)
+#library(ggdark)
+#First-order change
+firstorderchange <- data.frame('Time' = seq(1, 50, 1), 
+                                 'Constant.value' = rep(7, 50),
+                                 'Linear.change' = seq(0.0, 9.8, 0.2),
+                                 'Non.constant.change' = rep(NA, 50))
+
+for (i in 1:50) {
+  firstorderchange$Non.constant.change[i] <- (0.1 * 1.1 ** i)
+}
+
+
+ggplot(data = firstorderchange, aes(x = Time)) + 
+  geom_line(aes(y = Constant.value , color = 'Constant value')) + 
+  geom_line(aes(y = Linear.change, color = 'Linear change')) +
+  geom_line(aes(y = Non.constant.change, color = 'Non-constant change')) +
+  xlab('Time') +
+  ylab('Value') +
+  ggtitle('First-order change') +
+  dark_mode() +
+  scale_color_manual(values=c("#00FF80", "#00FFFF", "#FF99FF")) +
+  theme(legend.title = element_blank())
+
+
+
+```
+```{r}
+#Second-order change
+secondorderchange <- data.frame('Time' = seq(1, 50, 1),
+                                  'Constant.oscillation' = rep(NA, 50), 
+                                  'Oscillation.changing.with.constant.rate' = rep(NA, 50), 
+                                  'Oscillating.oscillation' = rep(NA, 50))
+
+for (i in 1:50) {
+  secondorderchange$Constant.oscillation[i] = sin(i/2) + 10
+}
+
+
+for (i in 1:50) {
+  secondorderchange$Oscillation.changing.with.constant.rate[i] = sin(i * (i/125)) + 5
+}
+
+temp <- c(seq(1, 25, 1), seq(25, 1, -1))
+
+for (i in 1:50) {
+  secondorderchange$Oscillating.oscillation[i] = cos(temp[i] * temp[i] / 75)
+}
+
+ggplot(data = secondorderchange, aes(x = Time)) + 
+  geom_line(aes(y = Constant.oscillation , color = 'Constant oscillations')) + 
+  geom_line(aes(y = Oscillation.changing.with.constant.rate, color = 'Oscillations that change at a constant rate')) +
+  geom_line(aes(y = Oscillating.oscillation, color = 'Oscillations with oscillating frequency')) +
+  xlab('Time') +
+  ylab('Value') +
+  ggtitle('Second-order change') +
+  dark_mode() +
+  scale_color_manual(values=c("#00FF80", "#00FFFF", "#FF99FF")) +
+  theme(legend.title = element_blank()) 
+ 
+  
+```
+
+```{r}
+#Create a Lorenz system (Third-order change)
+library(nonlinearTseries)
+Lorenz <- nonlinearTseries::lorenz(
+  sigma = 10,
+  beta = 8/3,
+  rho = 28,
+  start = c(-13, -14, 47),
+  time = seq(0, 50, by = 0.01),
+  do.plot = FALSE
+)
+
+#Plot third-order change
+ggplot(data = data.frame(Lorenz), aes(x = time, y = y)) + 
+  geom_line(color = "#00FF80") +
+  xlab('Time') +
+  ylab('Y value') +
+  ggtitle('Third-order change')+
+  dark_mode() 
+  
+ 
+```
+
+```{r}
+#Read in the EMA dataset
+library(readr)
+ESMdata <- read_csv("~/UvT DSS/Complex systems/ESMdata/ESMdata/ESMdata.csv")
+View(ESMdata)
+colnames(ESMdata)[1] <- "Observation"
+```
+
+```{r}
+#plot mood_down
+library("tidyverse")
+ggplot(data = ESMdata, aes(x = Observation, y = mood_down)) + 
+  geom_line(color = "#00FF80") +
+  xlab('Observation') +
+  ylab('I feel down rating') +
+  dark_mode() +
+  scale_y_continuous( n.breaks = 7, limits = c(-3, 3))
+
+
+
+```
+
+```{r}
+#Plot physical sensation hunger
+library(ggplot2)
+library(tidyverse)
+ggplot(data = ESMdata, aes(x = Observation, y = phy_hungry)) + 
+  geom_line(color = "#00FFFF") +
+  xlab('Observation') +
+  ylab('I feel hungry rating') +
+  dark_mode() +
+  scale_y_continuous( n.breaks = 7, limits = c(1,7))
+```
+

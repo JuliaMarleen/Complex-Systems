@@ -1,0 +1,176 @@
+---
+title: "report_week_4"
+author: "Marleen van Lubeek"
+date: "2023-04-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load the packages needed
+
+```{r message=FALSE, warning=FALSE}
+# Load required packages for exercises
+library(mgcv)
+library(tseries)
+library(ecp)
+library(nonlinearTseries)
+library(randtests)
+library(forecast)
+```
+
+# 1 - Load the ESMdata.csv file
+
+```{r}
+ESMdata <- read.csv("./ESMdata.csv")
+```
+
+# 2 - Plot the the time series
+
+```{r}
+#par(bg = "black")
+# Create basic plot
+#x <- rnorm(100)
+#plot(x)
+
+# Change the plot region color
+#rect(par("usr")[1], par("usr")[3],
+#     par("usr")[2], par("usr")[4],
+   #  col = "#262626"
+#     ) # Color
+
+# Add a new plot
+#par(new = TRUE)
+
+plot(ESMdata$se_ashamed,type='l', main="I am ashamed of myself",
+    xlab = "Index", ylab = "Ashamed",
+    col = "red",            # Symbol color
+    col.main = "green",     # Title color
+    col.sub = "blue",       # Subtitle color
+    col.lab = "sienna2",    # X and Y-axis labels color
+    col.axis = "maroon1",   # Tick labels color
+    fg = "orange")
+
+# Create basic plot
+#x <- rnorm(100)
+#plot(x)
+
+# Change the plot region color
+#rect(par("usr")[1], par("usr")[3],
+#     par("usr")[2], par("usr")[4],
+ #    col = "#262626"
+#     ) # Color
+
+# Add a new plot
+#par(new = TRUE)
+
+plot(ESMdata$mood_guilty,type='l', main="I feel guilty",
+    xlab = "Index", ylab = "Guilty",
+    col = "green",
+    col.main = "red",       # Title color
+    col.sub = "blue",       # Subtitle color
+    col.lab = "sienna2",    # X and Y-axis labels color
+    col.axis = "maroon1",   # Tick labels color
+    fg = "orange")
+```
+
+# 3 - Apply Bartels Rank Test
+```{r}
+bartels.rank.test(ESMdata$se_ashamed, alternative = "two.sided")
+bartels.rank.test(ESMdata$mood_guilty, alternative = "two.sided")
+```
+
+```{r}
+#par(bg = "black")
+
+# Create basic plot
+#x <- rnorm(100)
+#plot(x)
+
+# Change the plot region color
+#rect(par("usr")[1], par("usr")[3],
+#     par("usr")[2], par("usr")[4],
+#     col = "#262626") # Color
+
+# Add a new plot
+#par(new = TRUE)
+
+pacf(na.exclude(ESMdata$se_ashamed),lag.max = 1000,
+    col = "red",            # Symbol color
+    col.lab = "sienna2",    # X and Y-axis labels color
+    col.axis = "maroon1",   # Tick labels color
+    fg = "orange",
+    ci.col = "lightblue")
+title('I am ashamed of myself', col.main = "green")
+
+# Create basic plot
+#x <- rnorm(100)
+#plot(x)
+
+# Change the plot region color
+#rect(par("usr")[1], par("usr")[3],
+#     par("usr")[2], par("usr")[4],
+#     col = "#262626") # Color
+
+# Add a new plot
+#par(new = TRUE)
+
+pacf(na.exclude(ESMdata$mood_guilty),lag.max = 1000,
+    col = "green",            # Symbol color
+    col.lab = "sienna2",    # X and Y-axis labels color
+    col.axis = "maroon1",   # Tick labels color
+    fg = "orange",
+    ci.col = "lightblue")
+
+title('I feel guilty', col.main = "red")
+```
+
+KPSS test from https://www.statology.org/kpss-test-in-r/
+
+```{r}
+#perform KPSS test for ashamed
+kpss.test(ESMdata$se_ashamed, null="Trend")
+
+#perform KPSS test for guilty
+kpss.test(ESMdata$mood_guilty, null="Trend")
+```
+
+Forecasting: https://www.simplilearn.com/tutorials/data-science-tutorial/time-series-forecasting-in-r#time_series_forecasting_applications 
+
+```{r}
+ashamed_model <- auto.arima(ESMdata$se_ashamed)
+guilty_model <- auto.arima(ESMdata$mood_guilty)
+
+#par(bg = "darkgrey")
+
+myforecast1 <- forecast(ashamed_model, level=c(95), h=500)
+plot(myforecast1,
+    #main="I am ashamed of myself",
+    #xlab = "Index", ylab = "Ashamed",
+    col = "red",            # Symbol color
+    col.main = "green",     # Title color 
+    fg = "orange",
+    fcol = "lightyellow3",
+    shadecols = "lightblue3")
+
+myforecast2 <- forecast(guilty_model, level=c(95), h=500)
+plot(myforecast2,
+    col = "green",          # Symbol color
+    col.main = "red",       # Title color
+    fg = "orange",
+    fcol = "lightyellow3",
+    shadecols = "lightblue3")
+```
+
+```{r}
+Box.test(ashamed_model$resid, lag=5, type="Ljung-Box")
+Box.test(ashamed_model$resid, lag=10, type="Ljung-Box")
+Box.test(ashamed_model$resid, lag=15, type="Ljung-Box")
+
+Box.test(guilty_model$resid, lag=5, type="Ljung-Box")
+Box.test(guilty_model$resid, lag=10, type="Ljung-Box")
+Box.test(guilty_model$resid, lag=15, type="Ljung-Box")
+```
+

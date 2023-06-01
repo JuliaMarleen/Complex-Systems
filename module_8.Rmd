@@ -1,0 +1,422 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+options(scipen=999)
+
+library(readr)
+library(hrbrthemes)
+library(tidyverse)
+library(rlang)
+library(rEDM)
+
+```
+
+```{r}
+data <- read_csv("../ESMdata/ESMdata.csv")
+View(data)
+colnames(data)[1] <- "Observation"
+```
+
+```{r}
+
+new <- data[,c(1:2,5,86, 11:22)]
+#new <- na.omit(new)
+new <- new[!duplicated(new$date), ]
+new$date <- as.Date(new$date, tryFormats = c("%d/%m/%y"))
+new
+
+new$Observation<- 1:nrow(new)
+
+View(new)
+
+
+```
+```{r}
+
+new2 <- new[, c(1,9, 14)]
+
+new2
+
+```
+```{r}
+
+#Let’s take a look at the time series.
+
+plot1 <- ggplot(data=new2, aes(x=Observation, y=mood_lonely)) + geom_line(aes(Observation, mood_lonely),color="black") + geom_line(aes(Observation,mood_guilty), color="red") + xlab("Days") + ylab("Item Rating") + ggtitle("Time Series of items mood_lonely and mood_guilty ") +
+scale_y_continuous( n.breaks = 7, limits = c(-3, 3))
+plot1
+
+```
+
+```{r}
+
+# Preprocessing? Yes, for EDM they should be normalized. 
+
+new2$mood_lonely <- as.numeric(scale(new2$mood_lonely))
+new2$mood_guilty <- as.numeric(scale(new2$mood_guilty))
+
+plot2 <- ggplot(data=new2, aes(x=Observation, y=mood_lonely)) + geom_line(aes(Observation, mood_lonely),color="black") + geom_line(aes(Observation,mood_guilty), color="red") + xlab("Days") + ylab("Item Rating") + ggtitle("Normalized Time Series of items")+
+scale_y_continuous( n.breaks = 7, limits = c(-6, 6))
+
+plot2
+
+```
+
+```{r}
+#Preprocessing? Overall, the signals look stationary, so no need to detrend. However, we will test this using a KPSS test.
+
+library(tseries)
+
+#perform KPSS test for stationarity for item mood_lonely
+kpss_lonely <- kpss.test(new2$mood_lonely, null="Trend")
+kpss_lonely
+
+#perform KPSS test for stationarity for item mood_guilty
+kpss_guilty <- kpss.test(new2$mood_guilty, null="Trend")
+kpss_guilty
+
+# The p-value is > 0.1 for both. Since this value is not less than .05, we fail to reject the null hypothesis of the KPSS test.
+# This means we can assume that the time series is trend stationary.
+
+```
+Determining the complexity of a system based on Simplex Projection, S-Map
+
+```{r}
+
+# Run simplex projection on new2$mood_lonely
+
+simplex_out <- Simplex(dataFrame = new2, lib = "1 118", pred = "119 238", E=1, columns='mood_lonely', target ='mood_lonely')
+simplex_out
+
+#simplex projections plot
+plot(simplex_out$Observations[2:120],type='l', xlab = "Days", ylab="Item Rating", main = "mood_lonely")
+lines(simplex_out$Predictions[2:120],type='l',col=2,lty=2)
+
+# Compute error between observed and predicted values
+ComputeError(simplex_out$Observations, simplex_out$Predictions)
+
+
+# Run simplex projection on new2$mood_guilty
+
+simplex_out2 <- Simplex(dataFrame = new2, lib = "1 118", pred = "119 238", E=1, columns='mood_guilty', target ='mood_guilty') 
+simplex_out2
+
+#simplex projections plot
+plot(simplex_out2$Observations[2:120],type='l', xlab = "Days", ylab="Item Rating", main = "mood_guilty")
+lines(simplex_out2$Predictions[2:120],type='l',col=2,lty=2)
+
+# Compute error between observed and predicted values
+ComputeError(simplex_out2$Observations, simplex_out2$Predictions)
+
+```
+
+
+```{r}
+#Check for the optimal embedding dimension for ML
+
+rho_emd <- EmbedDimension(dataFrame = new2, lib = "1 118", pred = "119 238", columns='mood_lonely', target ='mood_lonely')
+rho_emd
+
+
+rho_emd2 <- EmbedDimension(dataFrame = new2, lib = "1 118", pred = "119 238", columns='mood_guilty', target ='mood_guilty')
+rho_emd2
+
+#It looks like E =1 and E = 10 are the one the optimize prediction skill, respectively.
+
+```
+
+```{r}
+
+# Run simplex projection on new2$mood_lonely with optimized E
+#Perform simplex projection and visualize the observed vs predicted values and compute the error metrics
+
+simplex_out <- Simplex(dataFrame = new2, lib = "1 118", pred = "119 238", E=1, columns='mood_lonely', target ='mood_lonely')
+simplex_out
+
+#simplex projections plot
+plot(simplex_out$Observations[2:119],type='l', xlab = "Time_point", ylab="Value", main = "mood_lonely")
+lines(simplex_out$Predictions[2:119],type='l',col=2,lty=2)
+
+# Compute error between observed and predicted values
+ComputeError(simplex_out$Observations, simplex_out$Predictions)
+
+
+# Run simplex projection on mood_guilty
+
+simplex_out2 <- Simplex(dataFrame = new2, lib = "1 118", pred = "119 238", E=10, columns='mood_guilty', target ='mood_guilty') 
+simplex_out2
+
+#simplex projections plot
+plot(simplex_out2$Observations[2:119],type='l', xlab = "Time_point", ylab="Item Rating", main = "mood_guilty")
+lines(simplex_out2$Predictions[2:119],type='l',col=2,lty=2)
+
+# Compute error between observed and predicted values
+ComputeError(simplex_out2$Observations, simplex_out2$Predictions)
+
+
+```
+
+```{r}
+#Determine an optimal $\theta$ for weighting in S-Map projection
+
+# Check for state dependence on mood_lonely
+rho_theta_lonely <- PredictNonlinear(dataFrame = new2, lib = "1 118", pred = "119 238", E=1, columns='mood_lonely', target ='mood_lonely')
+
+# Check for state dependence on mood_guilty
+rho_theta_guilty <- PredictNonlinear(dataFrame = new2, lib = "1 118", pred = "119 238", E=10, columns='mood_guilty', target ='mood_guilty')
+
+#It looks like ρ is maximized at θ=0 and =8 (theta is 0), repectively. So optimal value could be 0 and 8.
+
+#conclusions on state dependence. e.g.:
+#Since optimal θ=0 , this signal is likely not to exhibit state dependency (nonlinearity). The slope looks negative, but the prediction skill is very near to one the entire time.
+
+```
+Convergent Cross-Mapping (CCM)
+
+Is there a bidirectional ‘causal’ relationship between AP and ML? Perform convergent cross-mapping to test this and compare it with a cross-correlation.
+  - Does there seem to be a relationship? If so, is it            bidirectional or unidirectional?
+
+```{r}
+
+# Let’s get the right E
+
+rho_emd3 <- EmbedDimension(dataFrame = new2, lib = "1 118", pred = "119 238", columns='mood_lonely', target ='mood_guilty')
+
+```
+
+```{r}
+
+#CCM
+
+# Run a cross correlation
+xcor_out <- ccf(new2$mood_lonely,new2$mood_guilty,lag.max=6,type="correlation",plot = FALSE)$acf
+
+# Run the convergent cross mapping
+# Note that libSizes is the start, stop and increment index of library sizes
+# In reality you should go up to max lib size
+cmap <- CCM( dataFrame = new2, E = 2, Tp = 0, columns = "mood_guilty", target = "mood_lonely", libSizes = "3 118 5", sample = 100, showPlot = TRUE )
+# Add the cross correlation to the plot
+abline(h = max(abs(xcor_out)), col="black",lty=2)
+
+# max(abs(xcor_out))
+```
+
+```{r}
+
+# Test here for presence on increasing monotonic trend
+Kendall::MannKendall(cmap$`mood_lonely:mood_guilty`)
+
+Kendall::MannKendall(cmap$`mood_guilty:mood_lonely`)
+```
+
+```{r}
+#intrpretation e.g.:
+#Judging from the figure as well as the results from the Kendall’s test, it appears there is a bidirectional relationship between AP and MP. However, ML cross-maps more strongly to AP, than vice versa. Note however that our max(abs(xcor_out)) = 0.4897969, which is slightly higher than our ρ at maximum library length.
+
+max(abs(xcor_out))
+```
+The rest is not relevant.
+
+<!-- ```{r} -->
+<!-- library(nonlinearTseries) -->
+
+<!-- #  Does adding an additional variable increase our prediction skill using simplex projection? Perform univariate (on ML) and multivariate embedding (with both ML and AP) and compare the prediction skill. -->
+
+<!-- # First we find the right parameters for univariate embedding -->
+<!-- tau.ami <- timeLag(new2$mood_lonely, technique = "ami", lag.max = 100, do.plot = T) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- # Now we've selected the delay, determine an appropriate number of embedding dimensions using Cao's method -->
+
+<!-- emb.dim = estimateEmbeddingDim(new2$mood_lonely, time.lag = tau.ami, max.embedding.dim = 15) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- # Print both parameters -->
+<!-- print(tau.ami) -->
+
+<!-- print(emb.dim) -->
+
+
+<!-- ``` -->
+<!-- ```{r} -->
+
+<!-- #Now we will run the univariate forecasting with S-Map. -->
+
+<!-- # Run univariate s-map -->
+<!-- smap_mood_lonely_uni <- SMap(dataFrame = new2, lib = "1 118", pred = "119 238", E=emb.dim, tau = tau.ami, columns='mood_lonely', target ='mood_lonely', embedded = FALSE, theta=0) -->
+<!-- univariate_stats <- compute_stats(smap_mood_lonely_uni$predictions$Observations,smap_mood_lonely_uni$predictions$Predictions) -->
+<!-- univariate_stats -->
+
+<!-- ``` -->
+<!-- Let’s create our multivariate embedding and simplex projection. In this case, we are only making the projection using ML and AP with no time delayed copies. -->
+
+<!-- ```{r} -->
+
+<!-- smap_ML_multi <- block_lnlp(block = new2, method= "s-map", lib = "1 118", pred = "119 238", columns= c("mood_lonely", "mood_guilty"), first_column_time = TRUE, stats_only = FALSE, theta=0, save_smap_coefficients = TRUE) -->
+
+<!-- # Extract our metrics -->
+<!-- multivariate_rho_ML <- smap_ML_multi$stats$rho[1] -->
+<!-- smap_ML_multi$stats$rho[1] -->
+<!-- smap_ML_multi$stats$mae[1] -->
+<!-- smap_ML_multi$stats$rmse[1] -->
+
+<!-- ``` -->
+<!--  How does multi-view embedding compare? Does it increase prediction skill? -->
+
+<!-- ```{r} -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- ``` -->
+
+
+<!-- Forecasting with different embeddings -->
+
+<!-- ```{r} -->
+
+<!-- mv_out <- multiview(new2, lib = "1 118", pred = "119 238", E=2, target= "mood_guilty", k=5) -->
+
+<!-- compute_stats(mv_out$Predictions$Observations,mv_out$Predictions$Predictions) -->
+
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+
+<!-- # #load data for simplex projection mood_strong -->
+<!-- #  -->
+<!-- # strong_simplex <- as.data.frame(cbind(new$Observation,new$mood_strong)) -->
+<!-- #  -->
+<!-- # names(strong_simplex) <- c("time_point","mood_strong") -->
+<!-- #  -->
+<!-- # # normalize the signal -->
+<!-- #  -->
+<!-- # strong_simplex$mood_strong <- as.numeric(scale(strong_simplex$mood_strong))   -->
+<!-- #  -->
+<!-- # strong_simplex -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- # #load data for simplex projection mood_irritat -->
+<!-- #  -->
+<!-- # irritat_simplex <- as.data.frame(cbind(new$Observation,new$mood_irritat)) -->
+<!-- #  -->
+<!-- # names(irritat_simplex) <- c("time_point","mood_irritat") -->
+<!-- #  -->
+<!-- # # normalize the signal -->
+<!-- #  -->
+<!-- # irritat_simplex$mood_irritat <- as.numeric(scale(irritat_simplex$mood_irritat))   -->
+<!-- #  -->
+<!-- # irritat_simplex -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- # ``` -->
+<!-- #  -->
+<!-- # ```{r} -->
+<!-- #  -->
+<!-- # # Run simplex projection on mood_strong -->
+<!-- #  -->
+<!-- # simplex_out <- Simplex(dataFrame = strong_simplex, lib = "1 118", pred = "119 238", E=1, columns='mood_strong', target ='mood_strong') #753 is the day after which the transition in depressive symptoms took place. -->
+<!-- # simplex_out -->
+<!-- #  -->
+<!-- # #simplex projections plot -->
+<!-- # plot(simplex_out$Observations[2:121],type='l', xlab = "Time_point", ylab="Value", main = "Mood_strong") -->
+<!-- # lines(simplex_out$Predictions[2:121],type='l',col=2,lty=2) -->
+<!-- #  -->
+<!-- # # Compute error between observed and predicted values -->
+<!-- # ComputeError(simplex_out$Observations, simplex_out$Predictions) -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # Run simplex projection on mood_irritat -->
+<!-- #  -->
+<!-- # simplex_out2 <- Simplex(dataFrame = irritat_simplex, lib = "1 118", pred = "119 238", E=1, columns='mood_irritat', target ='mood_irritat') #753 is the day after which the transition in depressive symptoms took place. -->
+<!-- # simplex_out2 -->
+<!-- #  -->
+<!-- # #simplex projections plot -->
+<!-- # plot(simplex_out2$Observations[2:121],type='l', xlab = "Time_point", ylab="Value", main = "mood_irritat") -->
+<!-- # lines(simplex_out2$Predictions[2:121],type='l',col=2,lty=2) -->
+<!-- #  -->
+<!-- # # Compute error between observed and predicted values -->
+<!-- # ComputeError(simplex_out2$Observations, simplex_out2$Predictions) -->
+<!-- #  -->
+<!-- # ``` -->
+<!-- #  -->
+<!-- # ```{r} -->
+<!-- #  -->
+<!-- # rho_emd <- EmbedDimension(dataFrame = strong_simplex, lib = "1 118", pred = "119 238", columns='mood_strong', target ='mood_strong') -->
+<!-- # rho_emd -->
+<!-- #  -->
+<!-- #  -->
+<!-- # rho_emd2 <- EmbedDimension(dataFrame = irritat_simplex, lib = "1 118", pred = "119 238", columns='mood_irritat', target ='mood_irritat') -->
+<!-- # rho_emd2 -->
+<!-- #  -->
+<!-- # ``` -->
+<!-- #  -->
+<!-- # ```{r} -->
+<!-- #  -->
+<!-- # # Check for state dependence on mood_strong -->
+<!-- # rho_theta_strong <- PredictNonlinear(dataFrame = strong_simplex, lib = "1 118", pred = "119 238", E=1, columns='mood_strong', target ='mood_strong') -->
+<!-- #  -->
+<!-- # # Check for state dependence on mood_strong -->
+<!-- # rho_theta_irritat <- PredictNonlinear(dataFrame = irritat_simplex, lib = "1 118", pred = "119 238", E=7, columns='mood_irritat', target ='mood_irritat') -->
+<!-- #  -->
+<!-- # ``` -->
+<!-- #  -->
+<!-- # ```{r} -->
+<!-- #  -->
+<!-- # # Here we can plug back in that best theta value to get an S-map projection  -->
+<!-- # # with appropriate weighting -->
+<!-- # s_map_strong <- SMap(dataFrame = strong_simplex, lib = "1 118", pred = "119 238", E=1, theta=2, columns ='mood_strong', target ='mood_strong')  -->
+<!-- # ComputeError(s_map_strong$predictions$Observations, s_map_strong$predictions$Predictions) -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # Here we can plug back in that best theta value to get an S-map projection  -->
+<!-- # # with appropriate weighting -->
+<!-- # s_map_strong2 <- SMap(dataFrame = irritat_simplex, lib = "1 118", pred = "119 238", E=1, theta=8, columns ='mood_irritat', target ='mood_irritat')  -->
+<!-- # ComputeError(s_map_strong2$predictions$Observations, s_map_strong2$predictions$Predictions) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- #  -->
+<!-- # # Here we can plug back in that best theta value to get an S-map projection  -->
+<!-- # # with appropriate weighting -->
+<!-- # s_map_strong <- SMap(dataFrame = new2, lib = "1 118", pred = "119 238", E=1, theta=0, columns ='mood_lonely', target ='mood_lonely')  -->
+<!-- # ComputeError(s_map_strong$predictions$Observations, s_map_strong$predictions$Predictions) -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # Here we can plug back in that best theta value to get an S-map projection  -->
+<!-- # # with appropriate weighting -->
+<!-- # s_map_strong2 <- SMap(dataFrame = new2, lib = "1 118", pred = "119 238", E=1, theta=8, columns ='mood_guilty', target ='mood_guilty')  -->
+<!-- # ComputeError(s_map_strong2$predictions$Observations, s_map_strong2$predictions$Predictions) -->
+
+<!-- ``` -->
+
